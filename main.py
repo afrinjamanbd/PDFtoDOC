@@ -9,7 +9,8 @@ import re
 
 document_save = Document()
 chapter = []
-keywords = input("Enter a keyword to detect the pages for new chapter: ")
+keywords = input("Enter a keyword to detect the pages for new chapter or press enter to skip: ")
+
 
 def fonts(doc, granularity=False):
     """Extracts fonts and their usage in PDF documents.
@@ -82,7 +83,7 @@ def font_tags(font_counts, styles):
             idx = 0
             size_tag[size] = '<p>'
         if size > p_size:
-            size_tag[size] = '<pdftodocH{0}>'.format(idx)
+            size_tag[size] = '<HEADER_{0}>'.format(idx)
         elif size < p_size:
             size_tag[size] = '<s{0}>'.format(idx)
 
@@ -152,20 +153,19 @@ def main():
         ignore_words = i_words_file.read().splitlines()
     ignore_words = [" " + each_string + " " for each_string in ignore_words]
 
+    doc_name = input("Enter your pdf file name: ")
     header_font_list = []
-    document = 'EntireFIle.pdf'
+    document = doc_name + '.pdf'
     doc = fitz.open(document)
-    # final = ""
-    # i = 0
-    # elements = []
-    enter = True
-    Split_File = input('Do you want to split output file into chapters? Please type 1 for yes otherwise type 0 and press enter : ')
-    split = int(Split_File)
+    Split_File = input('Do you want to split output file? Please type 1 for yes otherwise type 0 and press enter : ')
     print("Please type the tags of header fonts you want to add and type quit")
-    print("Example : <pdftodocH17> \nYou can get the list of header tags from detect_header python script.")
+    print("Example : <HEADER_17> \nYou can get the list of header tags from detect_header python script.")
+    split = int(Split_File)
+    enter = True
+
     while enter:
         add_header_font = input('Type Header tag or type quit: ')
-        if "<pdftodocH" in add_header_font:
+        if "<HEADER_" in add_header_font:
             header_font_list.append(add_header_font)
         if "quit" in add_header_font:
             enter = False
@@ -175,7 +175,6 @@ def main():
     font_counts, styles = fonts(doc, granularity=False)
     size_tag = font_tags(font_counts, styles)
     page_count = doc.pageCount
-    print(chapter)
 
     if split ==0:
         final = ""
@@ -186,20 +185,23 @@ def main():
         print("Total lines are " +str(len(elements)))
 
         for each_element in elements:
-            if "<pdftodocH" in each_element:
+            if "<HEADER_" in each_element:
                 if final != "":
                     try:
                         string_list = final.split(". ")
-                        #string_list = re.split(r'.(?=. [A-Z])', final)
                         for sk in string_list:
                             sk = sk+".\n"
                             for word in finding_words:
                                 if word in sk:
-                                    first ,last= sk.split(word)
-                                    p = document_save.add_paragraph(first)
-                                    runner = p.add_run(word)
-                                    runner.bold = True
-                                    p.add_run(last)
+                                    for i_word in ignore_words:
+                                        if i_word in sk:
+                                            break
+                                    else:
+                                        first, last = sk.split(word)
+                                        p = document_save.add_paragraph(first)
+                                        runner = p.add_run(word)
+                                        runner.bold = True
+                                        p.add_run(last)
                                     break
 
                         document_save.save("demo.docx")
@@ -222,45 +224,76 @@ def main():
                 each_element = each_element.replace("<p>", " ")
                 final = final+each_element
 
-            elif  "<s228>" in each_element:
-                each_element = each_element.replace("\n"," ")
-                #final = final + each_element
+            # elif "<s228>" in each_element:
+            #     each_element = each_element.replace("\n", " ")
+            #     each_element = each_element.replace("<s228>", " ")
+            #     #final = final + each_element
 
             print(i," Lines Done")
             i = i+1
 
     elif split == 1:
-        final = ""
-        i = 0
+        running = True
+        chapter_no = 1
+
+        print("Do you want to split it by pages?")
+        answer = input("Type 1 for yes or press Enter: ")
+
+        if answer == "1":
+            chapter.clear()
+            continue_input = True
+            while continue_input:
+                page_num_str = input('Type page number or type quit: ')
+                if "quit" in page_num_str :
+                    continue_input = False
+                else:
+                    try:
+                        page_num = int(page_num_str)
+                        chapter.append(page_num)
+                    except Exception as e:
+                        print(e)
+
+        if  answer != "1":
+            if keywords == "":
+                print("\n *** Please run the program again and make sure "
+                      "to type a unique keyword to detect new chapter. ***")
+                exit()
         new_cycle = cycle(chapter)
         ending = next(new_cycle)
-        running = True
 
         while running:
+            i = 0
+            final = ""
+            elements_ = []
+            first_page = True
+            Last_page = True
             document_save = Document()
             starting, ending = chapter[0], chapter[1]
-            elements_ = []
             elements_ = headers_para(doc, size_tag, starting-1, ending-1)
             print("Total lines are " + str(len(elements_)))
 
             for each_element in elements_:
-                if "<pdftodocH" in each_element:
-                    if final != "":
+                if  "<HEADER_" in each_element:
+                    if  final != "":
                         try:
                             string_list = final.split(". ")
                             # string_list = re.split(r'.(?=. [A-Z])', final)
                             for sk in string_list:
                                 sk = sk + ".\n"
                                 for word in finding_words:
-                                    if word in sk:
-                                        first, last = sk.split(word)
-                                        p = document_save.add_paragraph(first)
-                                        runner = p.add_run(word)
-                                        runner.bold = True
-                                        p.add_run(last)
+                                    if  word in sk:
+                                        for i_word in ignore_words:
+                                            if i_word in sk:
+                                                break
+                                        else:
+                                            first, last = sk.split(word)
+                                            p = document_save.add_paragraph(first)
+                                            runner = p.add_run(word)
+                                            runner.bold = True
+                                            p.add_run(last)
                                         break
 
-                            document_save.save("Folder/"+"chapter_"+str(starting)+".docx")
+                            document_save.save("Folder/"+"chapter_"+str(chapter_no)+".docx")
                         except Exception as e:
                             print(e)
                             print(each_element)
@@ -268,8 +301,8 @@ def main():
                         if header_fonts in each_element:
                             try:
                                 each_element = each_element.replace(header_fonts, " ")
-                                document_save.add_heading(each_element)
-                                document_save.save("Folder/"+"chapter_"+str(starting)+".docx")
+                                document_save.add_heading(each_element.replace(keywords,""))
+                                document_save.save("Folder/"+"chapter_"+str(chapter_no)+".docx")
                             except Exception as e:
                                 print(e)
                                 print(each_element)
@@ -280,18 +313,44 @@ def main():
                     each_element = each_element.replace("<p>", " ")
                     final = final + each_element
 
-                elif "<s228>" in each_element:
-                    each_element = each_element.replace("\n", " ")
-                    each_element = each_element.replace("<s228>", " ")
-                    #final = final + each_element
+                # elif "<s228>" in each_element:
+                #     each_element = each_element.replace("\n", " ")
+                #     each_element = each_element.replace("<s228>", " ")
+                #     #final = final + each_element
 
-                print(i, " Lines Done")
+                if  i == len(elements_)-1:
+                    if final != "":
+                        pass
+                        try:
+                            string_list = final.split(". ")
+                            # string_list = re.split(r'.(?=. [A-Z])', final)
+                            for sk in string_list:
+                                sk = sk + ".\n"
+                                for word in finding_words:
+                                    if word in sk:
+                                        for i_word in ignore_words:
+                                            if i_word in sk:
+                                                break
+                                        else:
+                                            first, last = sk.split(word)
+                                            p = document_save.add_paragraph(first)
+                                            runner = p.add_run(word)
+                                            runner.bold = True
+                                            p.add_run(last)
+                                        break
+
+                            document_save.save("Folder/"+"chapter_"+str(chapter_no)+".docx")
+                        except Exception as e:
+                            print(e)
+                            print(each_element)
+
                 i = i + 1
+            print("Chapter no " +str(chapter_no)+ " Complete")
+            chapter_no = chapter_no + 1
             chapter.pop(0)
-            print()
-            print(chapter)
+
             if ending == chapter[len(chapter) - 1]:
-                print("Running False")
+                #print("Running False")
                 running = False
 
 if __name__ == '__main__':
